@@ -149,8 +149,15 @@ func (h *TaskHandler) SyncTasks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Optional device ID header — accepted but not yet persisted
-	_ = r.Header.Get("X-Device-ID")
+	// X-Device-ID is accepted for future per-device tracking and analytics.
+	// The server echoes it back so the client can confirm it was received.
+	// Session validation is stateless (Supabase token per request), so each device
+	// maintains an independent session — logging out on one device does not revoke
+	// tokens on other devices until they expire or are explicitly revoked in Supabase.
+	deviceID := r.Header.Get("X-Device-ID")
+	if deviceID != "" {
+		w.Header().Set("X-Device-ID", deviceID)
+	}
 
 	var body struct {
 		Tasks      []taskDTO `json:"tasks"`
