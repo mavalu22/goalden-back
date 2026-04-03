@@ -77,6 +77,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -257,20 +258,40 @@ func modelToDTO(t *model.Task) taskDTO {
 	}
 }
 
-// dtoToModel converts a taskDTO from JSON to a model.Task.
+// validPriorities and validRecurrences are the allowed enum values.
+var (
+	validPriorities  = map[string]bool{"normal": true, "high": true}
+	validRecurrences = map[string]bool{"none": true, "daily": true, "weekly": true, "custom_days": true}
+)
+
+// dtoToModel converts a taskDTO from JSON to a model.Task with input validation.
 func dtoToModel(dto taskDTO) (*model.Task, error) {
+	if dto.ID == "" {
+		return nil, fmt.Errorf("task id is required")
+	}
+	if dto.Title == "" {
+		return nil, fmt.Errorf("task title is required")
+	}
+
 	date, err := time.Parse("2006-01-02", dto.Date)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid date format (expected YYYY-MM-DD): %w", err)
 	}
 
 	priority := dto.Priority
 	if priority == "" {
 		priority = "normal"
 	}
+	if !validPriorities[priority] {
+		return nil, fmt.Errorf("invalid priority %q: must be 'normal' or 'high'", priority)
+	}
+
 	recurrence := dto.Recurrence
 	if recurrence == "" {
 		recurrence = "none"
+	}
+	if !validRecurrences[recurrence] {
+		return nil, fmt.Errorf("invalid recurrence %q: must be 'none', 'daily', 'weekly', or 'custom_days'", recurrence)
 	}
 
 	updatedAt := dto.UpdatedAt
