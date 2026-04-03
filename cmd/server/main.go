@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/goalden/goalden-api/internal/config"
+	"github.com/goalden/goalden-api/internal/database"
 	"github.com/goalden/goalden-api/internal/server"
 )
 
@@ -21,7 +22,21 @@ func main() {
 		log.Fatalf("failed to load config: %v", err)
 	}
 
-	srv := server.New(cfg)
+	ctx := context.Background()
+
+	db, err := database.Connect(ctx, cfg.DatabaseURL)
+	if err != nil {
+		log.Fatalf("failed to connect to database: %v", err)
+	}
+	defer db.Close()
+	log.Println("database connected")
+
+	if err := database.Migrate(ctx, db); err != nil {
+		log.Fatalf("failed to run migrations: %v", err)
+	}
+	log.Println("migrations applied")
+
+	srv := server.New(cfg, db)
 
 	httpServer := &http.Server{
 		Addr:         fmt.Sprintf(":%s", cfg.Port),
@@ -43,10 +58,10 @@ func main() {
 	<-quit
 
 	log.Println("shutting down server...")
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	if err := httpServer.Shutdown(ctx); err != nil {
+	if err := httpServer.Shutdown(shutdownCtx); err != nil {
 		log.Fatalf("server forced shutdown: %v", err)
 	}
 
