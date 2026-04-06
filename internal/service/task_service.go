@@ -99,7 +99,9 @@ func (s *TaskService) Sync(ctx context.Context, userID string, req SyncRequest) 
 	if len(req.Tasks) > 0 {
 		safe := make([]*model.Task, 0, len(req.Tasks))
 		for _, t := range req.Tasks {
-			if t.UserID != userID {
+			if t.UserID == "" {
+				t.UserID = userID // client omits user_id; derive from JWT
+			} else if t.UserID != userID {
 				continue // reject tasks belonging to another user
 			}
 			safe = append(safe, t)
