@@ -11,10 +11,18 @@
 //     any tasks in deleted_ids, then returns every task and deletion that occurred on
 //     the server since last_sync_at (excluding what the client just sent).
 //
-//  3. Client merges the server response into its local store:
-//     — upsert returned tasks (last-write-wins)
-//     — remove any IDs in returned deleted_ids
+//  3. Client merges the server response into its local store using last-write-wins:
+//     — upsert returned tasks (compare updated_at, keep whichever is newer)
+//     — apply deletions from deleted_tasks using their deleted_at for LWW comparison
 //     — persist the current server time as the new last_sync_at
+//
+// # Conflict resolution
+//
+// Conflict resolution is deterministic last-write-wins on updated_at:
+//   - If only one side has the record → that side wins (insert on the other side).
+//   - If both sides have the record → the side with the larger updated_at wins.
+//   - For deletions: the deletion's deleted_at is compared against the other
+//     side's updated_at; the newer timestamp wins.
 //
 // # Ownership
 //
@@ -41,13 +49,22 @@ type SyncRequest struct {
 	LastSyncAt time.Time
 }
 
+// DeletedTask pairs a task ID with the timestamp of its soft-deletion.
+// Including deleted_at allows the client to apply last-write-wins when
+// a task was locally modified after it was deleted on the server.
+type DeletedTask struct {
+	ID        string
+	DeletedAt time.Time
+}
+
 // SyncResponse carries server-side changes back to the client.
 type SyncResponse struct {
 	// Tasks contains tasks modified on the server since LastSyncAt that were
 	// not included in the client's push (avoids echoing the client's own changes).
 	Tasks []*model.Task
-	// DeletedIDs contains IDs of tasks soft-deleted on the server since LastSyncAt.
-	DeletedIDs []string
+	// DeletedTasks contains tasks soft-deleted on the server since LastSyncAt,
+	// including their deleted_at timestamps for last-write-wins conflict resolution.
+	DeletedTasks []DeletedTask
 }
 
 // TaskService encapsulates sync business logic on top of the task repository.
@@ -76,6 +93,7 @@ func (s *TaskService) GetAllTasks(ctx context.Context, userID string) ([]*model.
 func (s *TaskService) Sync(ctx context.Context, userID string, req SyncRequest) (SyncResponse, error) {
 	// Track IDs sent by the client so we can exclude them from the pull response.
 	clientIDs := make(map[string]struct{}, len(req.Tasks))
+	clientDeletedSet := make(map[string]struct{}, len(req.DeletedIDs))
 
 	// Push: upsert tasks sent by the client.
 	if len(req.Tasks) > 0 {
@@ -94,6 +112,7 @@ func (s *TaskService) Sync(ctx context.Context, userID string, req SyncRequest) 
 
 	// Push: soft-delete tasks requested by the client.
 	for _, id := range req.DeletedIDs {
+		clientDeletedSet[id] = struct{}{}
 		if err := s.repo.DeleteTask(ctx, id, userID); err != nil {
 			// Non-fatal: task may already be deleted or never existed.
 			continue
@@ -108,35 +127,35 @@ func (s *TaskService) Sync(ctx context.Context, userID string, req SyncRequest) 
 
 	responseTasks := make([]*model.Task, 0, len(serverTasks))
 	for _, t := range serverTasks {
-		if _, sentByClient := clientIDs[t.ID]; !sentByClient {
-			// Include non-deleted tasks and soft-deleted ones so the client can
-			// reconcile deletions via the DeletedAt field.
-			if t.DeletedAt == nil {
-				responseTasks = append(responseTasks, t)
-			}
+		if _, sentByClient := clientIDs[t.ID]; sentByClient {
+			continue
+		}
+		// Only include non-deleted tasks in responseTasks.
+		// Soft-deleted tasks are returned via DeletedTasks below.
+		if t.DeletedAt == nil {
+			responseTasks = append(responseTasks, t)
 		}
 	}
 
-	// Pull: IDs deleted on the server since last sync.
-	deletedIDs, err := s.repo.GetDeletedIDsSince(ctx, userID, req.LastSyncAt)
+	// Pull: tasks deleted on the server since last sync (with their deleted_at timestamps).
+	deletedPairs, err := s.repo.GetDeletedIDsSince(ctx, userID, req.LastSyncAt)
 	if err != nil {
 		return SyncResponse{}, err
 	}
 
-	// De-duplicate: exclude IDs the client sent as deletions (they already know).
-	clientDeletedSet := make(map[string]struct{}, len(req.DeletedIDs))
-	for _, id := range req.DeletedIDs {
-		clientDeletedSet[id] = struct{}{}
-	}
-	filteredDeleted := make([]string, 0, len(deletedIDs))
-	for _, id := range deletedIDs {
-		if _, sentByClient := clientDeletedSet[id]; !sentByClient {
-			filteredDeleted = append(filteredDeleted, id)
+	// De-duplicate: exclude IDs the client already sent as deletions.
+	deletedTasks := make([]DeletedTask, 0, len(deletedPairs))
+	for _, pair := range deletedPairs {
+		if _, sentByClient := clientDeletedSet[pair.ID]; !sentByClient {
+			deletedTasks = append(deletedTasks, DeletedTask{
+				ID:        pair.ID,
+				DeletedAt: pair.DeletedAt,
+			})
 		}
 	}
 
 	return SyncResponse{
-		Tasks:      responseTasks,
-		DeletedIDs: filteredDeleted,
+		Tasks:        responseTasks,
+		DeletedTasks: deletedTasks,
 	}, nil
 }

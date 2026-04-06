@@ -201,15 +201,20 @@ func (h *TaskHandler) SyncTasks(w http.ResponseWriter, r *http.Request) {
 	for _, t := range result.Tasks {
 		responseTasks = append(responseTasks, modelToDTO(t))
 	}
-	if result.DeletedIDs == nil {
-		result.DeletedIDs = []string{}
+	// Build deleted_tasks as [{id, deleted_at}, ...] for LWW-aware client merge.
+	deletedTasksOut := make([]map[string]any, 0, len(result.DeletedTasks))
+	for _, d := range result.DeletedTasks {
+		deletedTasksOut = append(deletedTasksOut, map[string]any{
+			"id":         d.ID,
+			"deleted_at": d.DeletedAt,
+		})
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]any{
-		"tasks":       responseTasks,
-		"deleted_ids": result.DeletedIDs,
+		"tasks":         responseTasks,
+		"deleted_tasks": deletedTasksOut,
 	})
 }
 
