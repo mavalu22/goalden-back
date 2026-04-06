@@ -11,6 +11,7 @@ import (
 	"github.com/goalden/goalden-api/internal/handler"
 	appmiddleware "github.com/goalden/goalden-api/internal/middleware"
 	"github.com/goalden/goalden-api/internal/repository/postgres"
+	"github.com/goalden/goalden-api/internal/service"
 )
 
 // New constructs the HTTP router with all routes wired up.
@@ -30,9 +31,12 @@ func New(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	userRepo := postgres.NewUserRepo(db)
 	taskRepo := postgres.NewTaskRepo(db)
 
+	// Services
+	taskSvc := service.NewTaskService(taskRepo)
+
 	// Handlers
 	authHandler := handler.NewAuthHandler(userRepo)
-	taskHandler := handler.NewTaskHandler(taskRepo)
+	taskHandler := handler.NewTaskHandler(taskSvc)
 
 	// Auth middleware
 	authMiddleware := appmiddleware.NewAuthMiddleware(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)

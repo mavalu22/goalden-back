@@ -60,6 +60,33 @@ func (r *TaskRepo) GetTasksForUserAndDate(ctx context.Context, userID string, da
 	return scanTasks(rows)
 }
 
+// GetDeletedIDsSince returns IDs of tasks that were soft-deleted on the server
+// after the given time. Used to propagate deletions to the requesting client.
+func (r *TaskRepo) GetDeletedIDsSince(ctx context.Context, userID string, since time.Time) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id FROM tasks
+		WHERE user_id = $1 AND deleted_at > $2
+		ORDER BY deleted_at ASC
+	`, userID, since)
+	if err != nil {
+		return nil, fmt.Errorf("get deleted ids since: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []string
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("scan deleted id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rows error: %w", err)
+	}
+	return ids, nil
+}
+
 // GetTasksUpdatedSince returns all tasks (including soft-deleted) for a user
 // that were modified after the given time. Soft-deleted tasks are included so
 // the client can propagate deletions.
