@@ -102,16 +102,20 @@ type taskDTO struct {
 	ID             string     `json:"id"`
 	UserID         string     `json:"user_id"`
 	Title          string     `json:"title"`
-	Date           string     `json:"date"`           // "YYYY-MM-DD"
+	Date           string     `json:"date"`            // "YYYY-MM-DD"
 	Priority       string     `json:"priority"`
 	Note           *string    `json:"note"`
 	Done           bool       `json:"done"`
 	Recurrence     string     `json:"recurrence"`
 	RecurrenceDays *string    `json:"recurrence_days"`
 	SortOrder      int        `json:"sort_order"`
+	SourceTaskID   *string    `json:"source_task_id"`  // non-nil for recurring-task instances
+	StartTimeMin   *int       `json:"start_time_minutes"` // optional; minutes from midnight
+	EndTimeMin     *int       `json:"end_time_minutes"`
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	CompletedAt    *time.Time `json:"completed_at"`
+	DeletedAt      *time.Time `json:"deleted_at"`      // non-nil = soft-deleted
 }
 
 // GetTasks handles GET /api/v1/tasks.
@@ -251,9 +255,13 @@ func modelToDTO(t *model.Task) taskDTO {
 		Recurrence:     t.Recurrence,
 		RecurrenceDays: t.RecurrenceDays,
 		SortOrder:      t.SortOrder,
+		SourceTaskID:   t.SourceTaskID,
+		StartTimeMin:   t.StartTimeMin,
+		EndTimeMin:     t.EndTimeMin,
 		CreatedAt:      t.CreatedAt,
 		UpdatedAt:      t.UpdatedAt,
 		CompletedAt:    t.CompletedAt,
+		DeletedAt:      t.DeletedAt,
 	}
 }
 
@@ -293,8 +301,12 @@ func dtoToModel(dto taskDTO) (*model.Task, error) {
 		Recurrence:     recurrence,
 		RecurrenceDays: dto.RecurrenceDays,
 		SortOrder:      dto.SortOrder,
+		SourceTaskID:   dto.SourceTaskID,
+		StartTimeMin:   dto.StartTimeMin,
+		EndTimeMin:     dto.EndTimeMin,
 		CreatedAt:      createdAt,
 		UpdatedAt:      updatedAt,
 		CompletedAt:    dto.CompletedAt,
+		DeletedAt:      dto.DeletedAt,
 	}, nil
 }

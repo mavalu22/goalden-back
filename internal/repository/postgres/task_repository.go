@@ -21,14 +21,19 @@ func NewTaskRepo(pool *pgxpool.Pool) *TaskRepo {
 	return &TaskRepo{pool: pool}
 }
 
-// GetTasksForUser returns all tasks belonging to a user.
+// selectCols is the canonical column list used in every SELECT.
+const selectCols = `
+	id, user_id, title, date, priority, note, done,
+	recurrence, recurrence_days, sort_order,
+	source_task_id, start_time_minutes, end_time_minutes,
+	created_at, updated_at, completed_at, deleted_at`
+
+// GetTasksForUser returns all non-deleted tasks belonging to a user.
 func (r *TaskRepo) GetTasksForUser(ctx context.Context, userID string) ([]*model.Task, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, title, date, priority, note, done,
-		       recurrence, recurrence_days, sort_order,
-		       created_at, updated_at, completed_at
+		SELECT`+selectCols+`
 		FROM tasks
-		WHERE user_id = $1
+		WHERE user_id = $1 AND deleted_at IS NULL
 		ORDER BY date ASC, sort_order ASC
 	`, userID)
 	if err != nil {
@@ -39,14 +44,12 @@ func (r *TaskRepo) GetTasksForUser(ctx context.Context, userID string) ([]*model
 	return scanTasks(rows)
 }
 
-// GetTasksForUserAndDate returns tasks for a specific user and date.
+// GetTasksForUserAndDate returns non-deleted tasks for a specific user and date.
 func (r *TaskRepo) GetTasksForUserAndDate(ctx context.Context, userID string, date time.Time) ([]*model.Task, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, title, date, priority, note, done,
-		       recurrence, recurrence_days, sort_order,
-		       created_at, updated_at, completed_at
+		SELECT`+selectCols+`
 		FROM tasks
-		WHERE user_id = $1 AND date = $2
+		WHERE user_id = $1 AND date = $2 AND deleted_at IS NULL
 		ORDER BY sort_order ASC
 	`, userID, date)
 	if err != nil {
@@ -57,12 +60,12 @@ func (r *TaskRepo) GetTasksForUserAndDate(ctx context.Context, userID string, da
 	return scanTasks(rows)
 }
 
-// GetTasksUpdatedSince returns all tasks for a user updated after the given time.
+// GetTasksUpdatedSince returns all tasks (including soft-deleted) for a user
+// that were modified after the given time. Soft-deleted tasks are included so
+// the client can propagate deletions.
 func (r *TaskRepo) GetTasksUpdatedSince(ctx context.Context, userID string, since time.Time) ([]*model.Task, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id, user_id, title, date, priority, note, done,
-		       recurrence, recurrence_days, sort_order,
-		       created_at, updated_at, completed_at
+		SELECT`+selectCols+`
 		FROM tasks
 		WHERE user_id = $1 AND updated_at > $2
 		ORDER BY updated_at ASC
@@ -81,28 +84,35 @@ func (r *TaskRepo) UpsertTask(ctx context.Context, task *model.Task) error {
 		INSERT INTO tasks (
 			id, user_id, title, date, priority, note, done,
 			recurrence, recurrence_days, sort_order,
-			created_at, updated_at, completed_at
+			source_task_id, start_time_minutes, end_time_minutes,
+			created_at, updated_at, completed_at, deleted_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10,
-			$11, $12, $13
+			$11, $12, $13,
+			$14, $15, $16, $17
 		)
 		ON CONFLICT (id) DO UPDATE SET
-			title           = EXCLUDED.title,
-			date            = EXCLUDED.date,
-			priority        = EXCLUDED.priority,
-			note            = EXCLUDED.note,
-			done            = EXCLUDED.done,
-			recurrence      = EXCLUDED.recurrence,
-			recurrence_days = EXCLUDED.recurrence_days,
-			sort_order      = EXCLUDED.sort_order,
-			updated_at      = EXCLUDED.updated_at,
-			completed_at    = EXCLUDED.completed_at
+			title              = EXCLUDED.title,
+			date               = EXCLUDED.date,
+			priority           = EXCLUDED.priority,
+			note               = EXCLUDED.note,
+			done               = EXCLUDED.done,
+			recurrence         = EXCLUDED.recurrence,
+			recurrence_days    = EXCLUDED.recurrence_days,
+			sort_order         = EXCLUDED.sort_order,
+			source_task_id     = EXCLUDED.source_task_id,
+			start_time_minutes = EXCLUDED.start_time_minutes,
+			end_time_minutes   = EXCLUDED.end_time_minutes,
+			updated_at         = EXCLUDED.updated_at,
+			completed_at       = EXCLUDED.completed_at,
+			deleted_at         = EXCLUDED.deleted_at
 		WHERE EXCLUDED.updated_at >= tasks.updated_at
 	`,
 		task.ID, task.UserID, task.Title, task.Date, task.Priority, task.Note, task.Done,
 		task.Recurrence, task.RecurrenceDays, task.SortOrder,
-		task.CreatedAt, task.UpdatedAt, task.CompletedAt,
+		task.SourceTaskID, task.StartTimeMin, task.EndTimeMin,
+		task.CreatedAt, task.UpdatedAt, task.CompletedAt, task.DeletedAt,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert task %s: %w", task.ID, err)
@@ -110,10 +120,13 @@ func (r *TaskRepo) UpsertTask(ctx context.Context, task *model.Task) error {
 	return nil
 }
 
-// DeleteTask removes a task by ID, enforcing user ownership.
+// DeleteTask soft-deletes a task by setting deleted_at, enforcing user ownership.
+// Soft delete is used so that the deletion can be propagated to other devices during sync.
 func (r *TaskRepo) DeleteTask(ctx context.Context, id, userID string) error {
 	_, err := r.pool.Exec(ctx, `
-		DELETE FROM tasks WHERE id = $1 AND user_id = $2
+		UPDATE tasks
+		SET deleted_at = NOW(), updated_at = NOW()
+		WHERE id = $1 AND user_id = $2
 	`, id, userID)
 	if err != nil {
 		return fmt.Errorf("delete task %s: %w", id, err)
@@ -138,28 +151,35 @@ func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) er
 			INSERT INTO tasks (
 				id, user_id, title, date, priority, note, done,
 				recurrence, recurrence_days, sort_order,
-				created_at, updated_at, completed_at
+				source_task_id, start_time_minutes, end_time_minutes,
+				created_at, updated_at, completed_at, deleted_at
 			) VALUES (
 				$1, $2, $3, $4, $5, $6, $7,
 				$8, $9, $10,
-				$11, $12, $13
+				$11, $12, $13,
+				$14, $15, $16, $17
 			)
 			ON CONFLICT (id) DO UPDATE SET
-				title           = EXCLUDED.title,
-				date            = EXCLUDED.date,
-				priority        = EXCLUDED.priority,
-				note            = EXCLUDED.note,
-				done            = EXCLUDED.done,
-				recurrence      = EXCLUDED.recurrence,
-				recurrence_days = EXCLUDED.recurrence_days,
-				sort_order      = EXCLUDED.sort_order,
-				updated_at      = EXCLUDED.updated_at,
-				completed_at    = EXCLUDED.completed_at
+				title              = EXCLUDED.title,
+				date               = EXCLUDED.date,
+				priority           = EXCLUDED.priority,
+				note               = EXCLUDED.note,
+				done               = EXCLUDED.done,
+				recurrence         = EXCLUDED.recurrence,
+				recurrence_days    = EXCLUDED.recurrence_days,
+				sort_order         = EXCLUDED.sort_order,
+				source_task_id     = EXCLUDED.source_task_id,
+				start_time_minutes = EXCLUDED.start_time_minutes,
+				end_time_minutes   = EXCLUDED.end_time_minutes,
+				updated_at         = EXCLUDED.updated_at,
+				completed_at       = EXCLUDED.completed_at,
+				deleted_at         = EXCLUDED.deleted_at
 			WHERE EXCLUDED.updated_at >= tasks.updated_at
 		`,
 			task.ID, task.UserID, task.Title, task.Date, task.Priority, task.Note, task.Done,
 			task.Recurrence, task.RecurrenceDays, task.SortOrder,
-			task.CreatedAt, task.UpdatedAt, task.CompletedAt,
+			task.SourceTaskID, task.StartTimeMin, task.EndTimeMin,
+			task.CreatedAt, task.UpdatedAt, task.CompletedAt, task.DeletedAt,
 		)
 		if err != nil {
 			return fmt.Errorf("batch upsert task %s: %w", task.ID, err)
@@ -177,7 +197,8 @@ func scanTasks(rows pgx.Rows) ([]*model.Task, error) {
 		if err := rows.Scan(
 			&t.ID, &t.UserID, &t.Title, &t.Date, &t.Priority, &t.Note, &t.Done,
 			&t.Recurrence, &t.RecurrenceDays, &t.SortOrder,
-			&t.CreatedAt, &t.UpdatedAt, &t.CompletedAt,
+			&t.SourceTaskID, &t.StartTimeMin, &t.EndTimeMin,
+			&t.CreatedAt, &t.UpdatedAt, &t.CompletedAt, &t.DeletedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)
 		}
