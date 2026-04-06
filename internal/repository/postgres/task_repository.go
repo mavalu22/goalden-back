@@ -9,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/goalden/goalden-api/internal/model"
+	"github.com/goalden/goalden-api/internal/repository"
 )
 
 // TaskRepo is the Postgres implementation of repository.TaskRepository.
@@ -60,11 +61,11 @@ func (r *TaskRepo) GetTasksForUserAndDate(ctx context.Context, userID string, da
 	return scanTasks(rows)
 }
 
-// GetDeletedIDsSince returns IDs of tasks that were soft-deleted on the server
-// after the given time. Used to propagate deletions to the requesting client.
-func (r *TaskRepo) GetDeletedIDsSince(ctx context.Context, userID string, since time.Time) ([]string, error) {
+// GetDeletedIDsSince returns (id, deleted_at) pairs for tasks soft-deleted after
+// the given time. The deleted_at timestamp is included for LWW conflict resolution.
+func (r *TaskRepo) GetDeletedIDsSince(ctx context.Context, userID string, since time.Time) ([]repository.DeletedTaskRef, error) {
 	rows, err := r.pool.Query(ctx, `
-		SELECT id FROM tasks
+		SELECT id, deleted_at FROM tasks
 		WHERE user_id = $1 AND deleted_at > $2
 		ORDER BY deleted_at ASC
 	`, userID, since)
@@ -73,18 +74,18 @@ func (r *TaskRepo) GetDeletedIDsSince(ctx context.Context, userID string, since 
 	}
 	defer rows.Close()
 
-	var ids []string
+	var refs []repository.DeletedTaskRef
 	for rows.Next() {
-		var id string
-		if err := rows.Scan(&id); err != nil {
-			return nil, fmt.Errorf("scan deleted id: %w", err)
+		var ref repository.DeletedTaskRef
+		if err := rows.Scan(&ref.ID, &ref.DeletedAt); err != nil {
+			return nil, fmt.Errorf("scan deleted ref: %w", err)
 		}
-		ids = append(ids, id)
+		refs = append(refs, ref)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("rows error: %w", err)
 	}
-	return ids, nil
+	return refs, nil
 }
 
 // GetTasksUpdatedSince returns all tasks (including soft-deleted) for a user
