@@ -145,4 +145,4 @@ All authenticated endpoints require a `Bearer` token in the `Authorization` head
 
 - [goalden-front](https://github.com/mavalu22/goalden-front) — Flutter frontend
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Full system architecture and sync protocol
-- [RELEASE.md](RELEASE.md) — Build, deployment, and migration instructions
+- [docs/RELEASE.md](docs/RELEASE.md) — Build, deployment, and migration instructions
