@@ -303,6 +303,14 @@ func dtoToModel(dto taskDTO) (*model.Task, error) {
 		createdAt = updatedAt
 	}
 
+	// Validate optional time range values (0–1439 = minutes from midnight).
+	if dto.StartTimeMin != nil && (*dto.StartTimeMin < 0 || *dto.StartTimeMin > 1439) {
+		return nil, fmt.Errorf("start_time_minutes out of range: %d (must be 0–1439)", *dto.StartTimeMin)
+	}
+	if dto.EndTimeMin != nil && (*dto.EndTimeMin < 0 || *dto.EndTimeMin > 1439) {
+		return nil, fmt.Errorf("end_time_minutes out of range: %d (must be 0–1439)", *dto.EndTimeMin)
+	}
+
 	return &model.Task{
 		ID:             dto.ID,
 		UserID:         dto.UserID,
