@@ -162,6 +162,23 @@ func (r *TaskRepo) DeleteTask(ctx context.Context, id, userID string) error {
 	return nil
 }
 
+// BatchDeleteTasks soft-deletes multiple tasks in a single query, enforcing
+// user ownership. Tasks not belonging to userID are silently ignored.
+func (r *TaskRepo) BatchDeleteTasks(ctx context.Context, ids []string, userID string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	_, err := r.pool.Exec(ctx, `
+		UPDATE tasks
+		SET deleted_at = NOW(), updated_at = NOW()
+		WHERE id = ANY($1) AND user_id = $2
+	`, ids, userID)
+	if err != nil {
+		return fmt.Errorf("batch delete tasks: %w", err)
+	}
+	return nil
+}
+
 // BatchUpsertTasks upserts multiple tasks efficiently using a single transaction.
 func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) error {
 	if len(tasks) == 0 {

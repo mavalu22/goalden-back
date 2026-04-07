@@ -112,12 +112,13 @@ func (s *TaskService) Sync(ctx context.Context, userID string, req SyncRequest) 
 		}
 	}
 
-	// Push: soft-delete tasks requested by the client.
+	// Push: soft-delete tasks requested by the client in one batch query.
 	for _, id := range req.DeletedIDs {
 		clientDeletedSet[id] = struct{}{}
-		if err := s.repo.DeleteTask(ctx, id, userID); err != nil {
-			// Non-fatal: task may already be deleted or never existed.
-			continue
+	}
+	if len(req.DeletedIDs) > 0 {
+		if err := s.repo.BatchDeleteTasks(ctx, req.DeletedIDs, userID); err != nil {
+			return SyncResponse{}, err
 		}
 	}
 

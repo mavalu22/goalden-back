@@ -24,4 +24,5 @@ type TaskRepository interface {
 	UpsertTask(ctx context.Context, task *model.Task) error
 	DeleteTask(ctx context.Context, id, userID string) error
 	BatchUpsertTasks(ctx context.Context, tasks []*model.Task) error
+	BatchDeleteTasks(ctx context.Context, ids []string, userID string) error
 }
