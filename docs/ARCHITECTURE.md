@@ -241,6 +241,6 @@ test/              Unit and integration tests
 ## Further Reading
 
 - `goalden-back/internal/handler/task_handler.go` — full sync protocol contract and endpoint documentation in package-level comment
-- `goalden-back/RELEASE.md` — build and deployment instructions
+- `goalden-back/docs/RELEASE.md` — build and deployment instructions
 - `goalden-front/docs/PLATFORM_STATUS.md` — platform support status
 - `goalden-front/sync_test_checklist.md` — manual sync test checklist
