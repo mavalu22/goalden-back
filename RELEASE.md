@@ -19,7 +19,7 @@ make run                    # start the API server
 
 ```bash
 make build
-# Output: bin/server
+# Output: bin/goalden-api
 ```
 
 ## Release
