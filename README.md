@@ -67,14 +67,17 @@ go mod download
 cp .env.example .env
 ```
 
-Fill in `.env`:
+Fill in `.env` with your Supabase credentials. See `.env.example` for descriptions of each variable.
 
-```
-DATABASE_URL=postgres://user:pass@localhost:5432/goalden
-REDIS_URL=redis://localhost:6379
-SUPABASE_JWT_SECRET=your-supabase-jwt-secret
-PORT=8080
-```
+**Required variables:**
+
+| Variable | Where to find it |
+|----------|-----------------|
+| `DATABASE_URL` | Supabase dashboard → Project Settings → Database → Connection string (URI) |
+| `SUPABASE_URL` | Supabase dashboard → Project Settings → API → Project URL |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase dashboard → Project Settings → API → service_role key |
+
+> The `SUPABASE_SERVICE_ROLE_KEY` is a server-side secret. Never expose it in client code or commit it to version control.
 
 ### 3. Start local services
 
