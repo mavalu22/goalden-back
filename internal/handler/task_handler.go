@@ -88,6 +88,7 @@ package handler
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -278,6 +279,19 @@ func dtoToModel(dto taskDTO) (*model.Task, error) {
 	recurrence := dto.Recurrence
 	if recurrence == "" {
 		recurrence = "none"
+	}
+
+	// Validate recurrence_days: each weekday must be in [1, 7] (ISO: 1=Mon … 7=Sun).
+	if dto.RecurrenceDays != nil && *dto.RecurrenceDays != "" {
+		var days []int
+		if err := json.Unmarshal([]byte(*dto.RecurrenceDays), &days); err != nil {
+			return nil, fmt.Errorf("recurrence_days is not valid JSON: %w", err)
+		}
+		for _, d := range days {
+			if d < 1 || d > 7 {
+				return nil, fmt.Errorf("recurrence_days contains invalid weekday %d (must be 1–7)", d)
+			}
+		}
 	}
 
 	updatedAt := dto.UpdatedAt
