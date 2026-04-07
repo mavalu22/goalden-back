@@ -179,59 +179,97 @@ func (r *TaskRepo) BatchDeleteTasks(ctx context.Context, ids []string, userID st
 	return nil
 }
 
-// BatchUpsertTasks upserts multiple tasks efficiently using a single transaction.
+// BatchUpsertTasks upserts multiple tasks in a single query using unnest()
+// array expansion. This sends all rows to PostgreSQL in one round-trip instead
+// of N sequential Exec calls, which is critical for remote databases (Supabase).
 func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) error {
 	if len(tasks) == 0 {
 		return nil
 	}
 
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin batch upsert tx: %w", err)
-	}
-	defer tx.Rollback(ctx) //nolint:errcheck
+	// Build parallel slices — one element per task per column.
+	ids := make([]string, len(tasks))
+	userIDs := make([]string, len(tasks))
+	titles := make([]string, len(tasks))
+	dates := make([]time.Time, len(tasks))
+	priorities := make([]string, len(tasks))
+	notes := make([]*string, len(tasks))
+	dones := make([]bool, len(tasks))
+	recurrences := make([]string, len(tasks))
+	recurrenceDays := make([]*string, len(tasks))
+	sortOrders := make([]int, len(tasks))
+	sourceTaskIDs := make([]*string, len(tasks))
+	startTimeMins := make([]*int, len(tasks))
+	endTimeMins := make([]*int, len(tasks))
+	createdAts := make([]time.Time, len(tasks))
+	updatedAts := make([]time.Time, len(tasks))
+	completedAts := make([]*time.Time, len(tasks))
+	deletedAts := make([]*time.Time, len(tasks))
 
-	for _, task := range tasks {
-		_, err := tx.Exec(ctx, `
-			INSERT INTO tasks (
-				id, user_id, title, date, priority, note, done,
-				recurrence, recurrence_days, sort_order,
-				source_task_id, start_time_minutes, end_time_minutes,
-				created_at, updated_at, completed_at, deleted_at
-			) VALUES (
-				$1, $2, $3, $4, $5, $6, $7,
-				$8, $9, $10,
-				$11, $12, $13,
-				$14, $15, $16, $17
-			)
-			ON CONFLICT (id) DO UPDATE SET
-				title              = EXCLUDED.title,
-				date               = EXCLUDED.date,
-				priority           = EXCLUDED.priority,
-				note               = EXCLUDED.note,
-				done               = EXCLUDED.done,
-				recurrence         = EXCLUDED.recurrence,
-				recurrence_days    = EXCLUDED.recurrence_days,
-				sort_order         = EXCLUDED.sort_order,
-				source_task_id     = EXCLUDED.source_task_id,
-				start_time_minutes = EXCLUDED.start_time_minutes,
-				end_time_minutes   = EXCLUDED.end_time_minutes,
-				updated_at         = EXCLUDED.updated_at,
-				completed_at       = EXCLUDED.completed_at,
-				deleted_at         = EXCLUDED.deleted_at
-			WHERE EXCLUDED.updated_at >= tasks.updated_at
-		`,
-			task.ID, task.UserID, task.Title, task.Date, task.Priority, task.Note, task.Done,
-			task.Recurrence, task.RecurrenceDays, task.SortOrder,
-			task.SourceTaskID, task.StartTimeMin, task.EndTimeMin,
-			task.CreatedAt, task.UpdatedAt, task.CompletedAt, task.DeletedAt,
+	for i, t := range tasks {
+		ids[i] = t.ID
+		userIDs[i] = t.UserID
+		titles[i] = t.Title
+		dates[i] = t.Date
+		priorities[i] = t.Priority
+		notes[i] = t.Note
+		dones[i] = t.Done
+		recurrences[i] = t.Recurrence
+		recurrenceDays[i] = t.RecurrenceDays
+		sortOrders[i] = t.SortOrder
+		sourceTaskIDs[i] = t.SourceTaskID
+		startTimeMins[i] = t.StartTimeMin
+		endTimeMins[i] = t.EndTimeMin
+		createdAts[i] = t.CreatedAt
+		updatedAts[i] = t.UpdatedAt
+		completedAts[i] = t.CompletedAt
+		deletedAts[i] = t.DeletedAt
+	}
+
+	_, err := r.pool.Exec(ctx, `
+		INSERT INTO tasks (
+			id, user_id, title, date, priority, note, done,
+			recurrence, recurrence_days, sort_order,
+			source_task_id, start_time_minutes, end_time_minutes,
+			created_at, updated_at, completed_at, deleted_at
 		)
-		if err != nil {
-			return fmt.Errorf("batch upsert task %s: %w", task.ID, err)
-		}
+		SELECT * FROM unnest(
+			$1::text[], $2::text[], $3::text[], $4::date[], $5::text[], $6::text[], $7::bool[],
+			$8::text[], $9::text[], $10::int[],
+			$11::text[], $12::int[], $13::int[],
+			$14::timestamptz[], $15::timestamptz[], $16::timestamptz[], $17::timestamptz[]
+		) AS t(
+			id, user_id, title, date, priority, note, done,
+			recurrence, recurrence_days, sort_order,
+			source_task_id, start_time_minutes, end_time_minutes,
+			created_at, updated_at, completed_at, deleted_at
+		)
+		ON CONFLICT (id) DO UPDATE SET
+			title              = EXCLUDED.title,
+			date               = EXCLUDED.date,
+			priority           = EXCLUDED.priority,
+			note               = EXCLUDED.note,
+			done               = EXCLUDED.done,
+			recurrence         = EXCLUDED.recurrence,
+			recurrence_days    = EXCLUDED.recurrence_days,
+			sort_order         = EXCLUDED.sort_order,
+			source_task_id     = EXCLUDED.source_task_id,
+			start_time_minutes = EXCLUDED.start_time_minutes,
+			end_time_minutes   = EXCLUDED.end_time_minutes,
+			updated_at         = EXCLUDED.updated_at,
+			completed_at       = EXCLUDED.completed_at,
+			deleted_at         = EXCLUDED.deleted_at
+		WHERE EXCLUDED.updated_at >= tasks.updated_at
+	`,
+		ids, userIDs, titles, dates, priorities, notes, dones,
+		recurrences, recurrenceDays, sortOrders,
+		sourceTaskIDs, startTimeMins, endTimeMins,
+		createdAts, updatedAts, completedAts, deletedAts,
+	)
+	if err != nil {
+		return fmt.Errorf("batch upsert tasks: %w", err)
 	}
-
-	return tx.Commit(ctx)
+	return nil
 }
 
 // scanTasks scans a pgx.Rows result set into a slice of Task pointers.
