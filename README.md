@@ -2,6 +2,17 @@
 
 The Go REST API backend for [Goalden](https://github.com/mavalu22/goalden-front) — a minimal daily and weekly task management app.
 
+## Engineering highlights
+
+- **Bidirectional sync** — single `POST /tasks/sync` endpoint handles full two-way task synchronization with last-write-wins conflict resolution based on `updated_at`
+- **Offline-first** — the Flutter client writes to SQLite first and syncs in the background; the server only sees net changes
+- **Soft-delete tombstoning** — deletions are propagated across devices via `deleted_at` timestamps rather than hard deletes
+- **Batch operations** — `BatchUpsertTasks` uses a single PostgreSQL `INSERT … SELECT * FROM unnest(…)` to avoid N-round-trips; `BatchDeleteTasks` uses `UPDATE … WHERE id = ANY($1)`
+- **JWT token cache** — in-memory cache with 5-minute TTL eliminates per-request Supabase auth calls (~40–50ms saved per request)
+- **Regression test coverage** — including soft-delete sync tests for recurring task deletion to prevent silent re-creation on other devices
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
+
 ---
 
 ## Tech stack
@@ -129,4 +140,5 @@ All authenticated endpoints require a `Bearer` token in the `Authorization` head
 ## Related
 
 - [goalden-front](https://github.com/mavalu22/goalden-front) — Flutter frontend
-- [RELEASE.md](RELEASE.md) — Deploy and migration instructions
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — Full system architecture and sync protocol
+- [RELEASE.md](RELEASE.md) — Build, deployment, and migration instructions
