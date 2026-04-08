@@ -219,22 +219,27 @@ Dockerfile         Production container build
 
 ```
 lib/
+  core/
+    config/        Environment config (Env class)
+    constants/     App-wide constants
+    platform/      Platform-specific URL scheme handling
+    theme/         Design system (colors, typography, spacing)
   data/
-    local/         Drift database, DAOs, migrations
+    local/         Drift database, DAOs, tables, sync metadata
     remote/        Go backend HTTP client
     services/      SyncService (HTTP + local DB coordination)
     repositories/  Repository implementations
   domain/
-    models/        Task model (Freezed)
+    models/        Task and auth user models (Freezed)
     repositories/  Repository interfaces
     services/      RecurrenceService
   presentation/
     auth/          Login and email auth screens
     today/         Today screen, providers, widgets
-    week/          Week screen
+    week/          Week screen, day columns
     profile/       Profile screen
     shared/        Reusable widgets and layouts
-  providers/       Global providers (auth, database, sync)
+  providers/       Global providers (auth, database, connectivity, sync)
 test/              Unit and integration tests
 ```
 
