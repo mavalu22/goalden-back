@@ -13,6 +13,39 @@ The system has two main repositories:
 
 ---
 
+## V1 Scope
+
+### Supported platforms
+
+| Platform | V1 status |
+|----------|-----------|
+| Linux (desktop) | Supported — primary V1 target |
+| Android | Supported — requires signing config for signed release builds |
+| macOS | Post-V1 — platform files not yet generated |
+| Windows | Post-V1 — platform files not yet generated |
+| iOS | Post-V1 — platform files not yet generated |
+
+### Features in V1
+
+- **Today screen** — daily task list with quick add, completion toggle, swipe-to-postpone, swipe-to-remove
+- **Week screen** — 7-day overview with per-day task lists
+- **Task detail** — creation and editing form with title, notes, time range, recurrence, and date
+- **Recurring tasks** — daily, weekly, and custom-days recurrence; source-aware deletion
+- **Desktop layout** — contextual sidebar and desktop-optimized interactions on Linux
+- **Authentication** — Email/password, Google Sign In, Apple Sign In (OAuth redirect on Linux/Android)
+- **Profile screen** — display name editing and sign-out
+- **Bidirectional sync** — offline-first with last-write-wins conflict resolution via the Go backend
+- **Empty and loading states** — throughout the UI
+
+### Not in V1
+
+- Native iOS/macOS/Windows platform support
+- Real-time sync (sync is triggered on mutation and app resume, not pushed by the server)
+- History screen
+- Goals screen
+
+---
+
 ## System Components
 
 ```
