@@ -12,7 +12,7 @@
 - **Primary database:** PostgreSQL 16+ (hosted on Supabase)
 - **Driver:** pgx (v5) — high-performance, pure Go PostgreSQL driver
 - **Migrations:** Embedded SQL files in `internal/database/migrations/` — run automatically at startup
-- **Query generation:** sqlc configured (`sqlc.yaml`) for type-safe query generation when modifying SQL queries
+- **Query layer:** Hand-written SQL via pgx — no ORM, no code generation
 
 ### Authentication
 - **Supabase Auth** handles all user authentication (Google, Apple, Email/Password)
@@ -64,17 +64,9 @@ goalden-api/
 │   │   └── postgres/
 │   │       ├── task_repository.go     # PostgreSQL task implementation
 │   │       └── user_repository.go     # PostgreSQL user implementation
-│   ├── model/
-│   │   ├── task.go                    # Task domain model
-│   │   └── user.go                    # User domain model
-│   └── pkg/                           # Internal shared utilities (scaffolded)
-│       ├── errs/
-│       ├── response/
-│       └── validator/
-├── sql/
-│   ├── migrations/                    # sqlc schema source (mirrors internal/database/migrations)
-│   └── queries/                       # sqlc query source files
-├── sqlc.yaml                          # sqlc configuration
+│   └── model/
+│       ├── task.go                    # Task domain model
+│       └── user.go                    # User domain model
 ├── Dockerfile
 ├── docker-compose.yml                 # Local dev: Postgres + Redis containers
 ├── .env.example
@@ -294,7 +286,6 @@ make dev          # Live reload (requires air)
 make test         # Run all tests with race detector
 make lint         # Run golangci-lint
 make migrate-up   # Apply migrations manually (optional — server auto-migrates)
-make sqlc         # Regenerate sqlc query code
 make docker-up    # Start local Postgres + Redis
 make docker-build # Build production Docker image
 ```
