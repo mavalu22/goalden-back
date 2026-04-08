@@ -205,13 +205,12 @@ Supabase JWT validation via its REST API adds ~40–50ms per request. A 5-minute
 cmd/server/        Entry point
 internal/
   config/          Environment config loading
-  database/        DB connection pool and migrations
-  handler/         HTTP handlers (request/response, DTO conversion)
+  database/        DB connection pool and embedded migrations
+  handler/         HTTP handlers (request/response)
   middleware/       Auth (JWT validation + token cache)
   model/           Domain models
-  repository/      Data access layer (PostgreSQL queries)
+  repository/      Data access layer (hand-written SQL via pgx)
   service/         Business logic (sync, task operations)
-sql/migrations/    SQL migration files
 Makefile           Build, test, lint, migrate targets
 Dockerfile         Production container build
 ```
@@ -222,16 +221,19 @@ Dockerfile         Production container build
 lib/
   data/
     local/         Drift database, DAOs, migrations
+    remote/        Go backend HTTP client
     services/      SyncService (HTTP + local DB coordination)
+    repositories/  Repository implementations
   domain/
     models/        Task model (Freezed)
     repositories/  Repository interfaces
     services/      RecurrenceService
   presentation/
+    auth/          Login and email auth screens
     today/         Today screen, providers, widgets
     week/          Week screen
-    history/       History screen
-    goals/         Goals screen (placeholder)
+    profile/       Profile screen
+    shared/        Reusable widgets and layouts
   providers/       Global providers (auth, database, sync)
 test/              Unit and integration tests
 ```
@@ -243,4 +245,4 @@ test/              Unit and integration tests
 - `goalden-back/internal/handler/task_handler.go` — full sync protocol contract and endpoint documentation in package-level comment
 - `goalden-back/docs/RELEASE.md` — build and deployment instructions
 - `goalden-front/docs/PLATFORM_STATUS.md` — platform support status
-- `goalden-front/sync_test_checklist.md` — manual sync test checklist
+- `goalden-front/docs/SYNC_TESTING.md` — manual sync test checklist

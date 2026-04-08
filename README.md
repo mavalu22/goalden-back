@@ -23,7 +23,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the full system design.
 | Language | Go 1.22+ |
 | HTTP framework | Chi v5 |
 | Database | PostgreSQL 16 (Supabase) |
-| Query generation | sqlc |
+| Query layer | Hand-written SQL via pgx |
 | Auth | Supabase JWT validation (in-memory cache) |
 | Containerization | Docker + Docker Compose (local-only, optional) |
 | Hosting | Railway |
@@ -39,17 +39,12 @@ cmd/server/         # Entry point
 internal/
 ├── config/         # Environment config loading
 ├── database/       # Database connection and embedded migrations
-├── dto/            # Request/response data transfer objects
 ├── handler/        # HTTP handlers (Chi routes)
-├── middleware/      # Auth (JWT validation), logging, CORS
+├── middleware/      # Auth (JWT validation), CORS
 ├── model/          # Domain models
-├── pkg/            # Shared utilities
-├── repository/     # Data access layer (sqlc-generated queries)
+├── repository/     # Data access layer (hand-written SQL via pgx)
 ├── server/         # HTTP server setup and routing
 └── service/        # Business logic layer
-sql/
-├── migrations/     # Versioned SQL migration files (also embedded in binary)
-└── queries/        # sqlc query definitions
 ```
 
 ---
@@ -128,7 +123,6 @@ Then set `DATABASE_URL` in `.env` to the local Postgres connection string.
 | `make lint` | Run golangci-lint |
 | `make migrate-up` | Apply migrations via golang-migrate (optional — server auto-migrates on startup) |
 | `make migrate-down` | Rollback last migration via golang-migrate |
-| `make sqlc` | Regenerate type-safe query code |
 | `make docker-up` | Start local Postgres + Redis containers |
 | `make docker-down` | Stop containers |
 | `make docker-build` | Build production Docker image |

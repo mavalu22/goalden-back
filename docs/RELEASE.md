@@ -12,7 +12,6 @@
 |------|-------------|
 | Docker + Docker Compose | Only if running a fully local Postgres instance instead of Supabase |
 | [`golang-migrate`](https://github.com/golang-migrate/migrate) | Only if running migrations manually; the server auto-migrates on startup |
-| `sqlc` | Only when modifying SQL queries |
 | [`air`](https://github.com/air-verse/air) | Only for live reload during local development (`make dev`) |
 
 ---
