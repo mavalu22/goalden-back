@@ -23,7 +23,7 @@ The server connects to Supabase PostgreSQL by default. Configure `.env` and run:
 ```bash
 go mod download
 cp .env.example .env     # fill in DATABASE_URL, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
-make build
+go build -o bin/goalden-api ./cmd/server   # or: make build
 ./bin/goalden-api
 ```
 
