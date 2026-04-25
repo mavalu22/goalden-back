@@ -114,7 +114,7 @@ type taskDTO struct {
 	ID             string     `json:"id"`
 	UserID         string     `json:"user_id"`
 	Title          string     `json:"title"`
-	Date           string     `json:"date"`              // "YYYY-MM-DD"
+	Date           string     `json:"date"`               // "YYYY-MM-DD"
 	Priority       string     `json:"priority"`
 	Note           *string    `json:"note"`
 	Done           bool       `json:"done"`
@@ -124,6 +124,7 @@ type taskDTO struct {
 	SourceTaskID   *string    `json:"source_task_id"`    // non-nil for recurring-task instances
 	StartTimeMin   *int       `json:"start_time_minutes"` // optional; minutes from midnight
 	EndTimeMin     *int       `json:"end_time_minutes"`
+	GoalID         *string    `json:"goal_id"`            // optional goal reference
 	CreatedAt      time.Time  `json:"created_at"`
 	UpdatedAt      time.Time  `json:"updated_at"`
 	CompletedAt    *time.Time `json:"completed_at"`
@@ -258,6 +259,7 @@ func modelToDTO(t *model.Task) taskDTO {
 		SourceTaskID:   t.SourceTaskID,
 		StartTimeMin:   t.StartTimeMin,
 		EndTimeMin:     t.EndTimeMin,
+		GoalID:         t.GoalID,
 		CreatedAt:      t.CreatedAt,
 		UpdatedAt:      t.UpdatedAt,
 		CompletedAt:    t.CompletedAt,
@@ -325,6 +327,7 @@ func dtoToModel(dto taskDTO) (*model.Task, error) {
 		SourceTaskID:   dto.SourceTaskID,
 		StartTimeMin:   dto.StartTimeMin,
 		EndTimeMin:     dto.EndTimeMin,
+		GoalID:         dto.GoalID,
 		CreatedAt:      createdAt,
 		UpdatedAt:      updatedAt,
 		CompletedAt:    dto.CompletedAt,
