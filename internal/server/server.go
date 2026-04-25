@@ -30,13 +30,16 @@ func New(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 	// Repositories
 	userRepo := postgres.NewUserRepo(db)
 	taskRepo := postgres.NewTaskRepo(db)
+	milestoneRepo := postgres.NewMilestoneRepo(db)
 
 	// Services
 	taskSvc := service.NewTaskService(taskRepo)
+	milestoneSvc := service.NewMilestoneService(milestoneRepo)
 
 	// Handlers
 	authHandler := handler.NewAuthHandler(userRepo)
 	taskHandler := handler.NewTaskHandler(taskSvc)
+	milestoneHandler := handler.NewMilestoneHandler(milestoneSvc)
 
 	// Auth middleware
 	authMiddleware := appmiddleware.NewAuthMiddleware(cfg.SupabaseURL, cfg.SupabaseServiceRoleKey)
@@ -51,6 +54,10 @@ func New(cfg *config.Config, db *pgxpool.Pool) http.Handler {
 			r.Get("/tasks", taskHandler.GetTasks)
 			r.Post("/tasks/sync", taskHandler.SyncTasks)
 			r.Delete("/tasks/{id}", taskHandler.DeleteTask)
+
+			r.Get("/milestones", milestoneHandler.GetMilestones)
+			r.Post("/milestones/sync", milestoneHandler.SyncMilestones)
+			r.Delete("/milestones/{id}", milestoneHandler.DeleteMilestone)
 		})
 	})
 
