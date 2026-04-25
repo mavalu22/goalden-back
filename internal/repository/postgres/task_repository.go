@@ -27,6 +27,7 @@ const selectCols = `
 	id, user_id, title, date, priority, note, done,
 	recurrence, recurrence_days, sort_order,
 	source_task_id, start_time_minutes, end_time_minutes,
+	goal_id,
 	created_at, updated_at, completed_at, deleted_at`
 
 // GetTasksForUser returns all non-deleted tasks belonging to a user.
@@ -113,12 +114,14 @@ func (r *TaskRepo) UpsertTask(ctx context.Context, task *model.Task) error {
 			id, user_id, title, date, priority, note, done,
 			recurrence, recurrence_days, sort_order,
 			source_task_id, start_time_minutes, end_time_minutes,
+			goal_id,
 			created_at, updated_at, completed_at, deleted_at
 		) VALUES (
 			$1, $2, $3, $4, $5, $6, $7,
 			$8, $9, $10,
 			$11, $12, $13,
-			$14, $15, $16, $17
+			$14,
+			$15, $16, $17, $18
 		)
 		ON CONFLICT (id) DO UPDATE SET
 			title              = EXCLUDED.title,
@@ -132,6 +135,7 @@ func (r *TaskRepo) UpsertTask(ctx context.Context, task *model.Task) error {
 			source_task_id     = EXCLUDED.source_task_id,
 			start_time_minutes = EXCLUDED.start_time_minutes,
 			end_time_minutes   = EXCLUDED.end_time_minutes,
+			goal_id            = EXCLUDED.goal_id,
 			updated_at         = EXCLUDED.updated_at,
 			completed_at       = EXCLUDED.completed_at,
 			deleted_at         = EXCLUDED.deleted_at
@@ -140,6 +144,7 @@ func (r *TaskRepo) UpsertTask(ctx context.Context, task *model.Task) error {
 		task.ID, task.UserID, task.Title, task.Date, task.Priority, task.Note, task.Done,
 		task.Recurrence, task.RecurrenceDays, task.SortOrder,
 		task.SourceTaskID, task.StartTimeMin, task.EndTimeMin,
+		task.GoalID,
 		task.CreatedAt, task.UpdatedAt, task.CompletedAt, task.DeletedAt,
 	)
 	if err != nil {
@@ -201,6 +206,7 @@ func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) er
 	sourceTaskIDs := make([]*string, len(tasks))
 	startTimeMins := make([]*int, len(tasks))
 	endTimeMins := make([]*int, len(tasks))
+	goalIDs := make([]*string, len(tasks))
 	createdAts := make([]time.Time, len(tasks))
 	updatedAts := make([]time.Time, len(tasks))
 	completedAts := make([]*time.Time, len(tasks))
@@ -220,6 +226,7 @@ func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) er
 		sourceTaskIDs[i] = t.SourceTaskID
 		startTimeMins[i] = t.StartTimeMin
 		endTimeMins[i] = t.EndTimeMin
+		goalIDs[i] = t.GoalID
 		createdAts[i] = t.CreatedAt
 		updatedAts[i] = t.UpdatedAt
 		completedAts[i] = t.CompletedAt
@@ -231,17 +238,20 @@ func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) er
 			id, user_id, title, date, priority, note, done,
 			recurrence, recurrence_days, sort_order,
 			source_task_id, start_time_minutes, end_time_minutes,
+			goal_id,
 			created_at, updated_at, completed_at, deleted_at
 		)
 		SELECT * FROM unnest(
 			$1::text[], $2::text[], $3::text[], $4::date[], $5::text[], $6::text[], $7::bool[],
 			$8::text[], $9::text[], $10::int[],
 			$11::text[], $12::int[], $13::int[],
-			$14::timestamptz[], $15::timestamptz[], $16::timestamptz[], $17::timestamptz[]
+			$14::text[],
+			$15::timestamptz[], $16::timestamptz[], $17::timestamptz[], $18::timestamptz[]
 		) AS t(
 			id, user_id, title, date, priority, note, done,
 			recurrence, recurrence_days, sort_order,
 			source_task_id, start_time_minutes, end_time_minutes,
+			goal_id,
 			created_at, updated_at, completed_at, deleted_at
 		)
 		ON CONFLICT (id) DO UPDATE SET
@@ -256,6 +266,7 @@ func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) er
 			source_task_id     = EXCLUDED.source_task_id,
 			start_time_minutes = EXCLUDED.start_time_minutes,
 			end_time_minutes   = EXCLUDED.end_time_minutes,
+			goal_id            = EXCLUDED.goal_id,
 			updated_at         = EXCLUDED.updated_at,
 			completed_at       = EXCLUDED.completed_at,
 			deleted_at         = EXCLUDED.deleted_at
@@ -264,6 +275,7 @@ func (r *TaskRepo) BatchUpsertTasks(ctx context.Context, tasks []*model.Task) er
 		ids, userIDs, titles, dates, priorities, notes, dones,
 		recurrences, recurrenceDays, sortOrders,
 		sourceTaskIDs, startTimeMins, endTimeMins,
+		goalIDs,
 		createdAts, updatedAts, completedAts, deletedAts,
 	)
 	if err != nil {
@@ -281,6 +293,7 @@ func scanTasks(rows pgx.Rows) ([]*model.Task, error) {
 			&t.ID, &t.UserID, &t.Title, &t.Date, &t.Priority, &t.Note, &t.Done,
 			&t.Recurrence, &t.RecurrenceDays, &t.SortOrder,
 			&t.SourceTaskID, &t.StartTimeMin, &t.EndTimeMin,
+			&t.GoalID,
 			&t.CreatedAt, &t.UpdatedAt, &t.CompletedAt, &t.DeletedAt,
 		); err != nil {
 			return nil, fmt.Errorf("scan task: %w", err)

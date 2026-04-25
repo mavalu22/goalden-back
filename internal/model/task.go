@@ -17,6 +17,7 @@ type Task struct {
 	SourceTaskID   *string    // non-nil when this task is a recurring instance
 	StartTimeMin   *int       // optional start time in minutes from midnight (0–1439)
 	EndTimeMin     *int       // optional end time in minutes from midnight (0–1439)
+	GoalID         *string    // optional reference to the Goal this task belongs to
 	CreatedAt      time.Time
 	UpdatedAt      time.Time
 	CompletedAt    *time.Time
